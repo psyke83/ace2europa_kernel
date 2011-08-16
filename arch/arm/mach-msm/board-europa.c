@@ -87,15 +87,8 @@
 #ifdef CONFIG_SENSORS_KR3D_ACCEL
 #define KR3DM_I2C_ADDR    0x12	//0x10
 #endif
-
-#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_I2C_RMI4
 #include <linux/i2c/europa_tsp_gpio.h>
-#endif
-#ifdef CONFIG_TOUCHSCREEN_MXT140_I2C_TSP
-#define TSP_SDA 	23
-#define TSP_SCL 	30
-#define TSP_INT 	19
-#endif
+
 
 #ifdef CONFIG_ARCH_MSM7X25
 #define MSM_PMEM_MDP_SIZE	0xb21000
@@ -106,15 +99,11 @@
 #endif
 
 #ifdef CONFIG_ARCH_MSM7X27
-#if defined(CONFIG_MACH_EUROPA)
-// EUROPA
-//#define MSM_PMEM_MDP_SIZE 	0x1700000 // size = 18<<20; in gralloc.cpp
-#define MSM_PMEM_MDP_SIZE 	0x1B76000 // size = 23<<20; in gralloc.cpp
-#define MSM_PMEM_ADSP_SIZE 	0x9DE000 // 0x8DE000		// 3M :0x86E000, 2M : 0x77F000 
-#define MSM_PMEM_AUDIO_SIZE 	0x5B000 
-#define MSM_FB_SIZE 		0x11C000 // 0x500000//0x11C000	//0x5DC00 
-#define PMEM_KERNEL_EBI1_SIZE 	0x1C000 
-#endif	// CONFIG_MACH_EUROPA
+#define MSM_PMEM_MDP_SIZE	0xA00000
+#define MSM_PMEM_ADSP_SIZE	0x77F000
+#define MSM_PMEM_AUDIO_SIZE	0x5B000
+#define MSM_FB_SIZE		0xA0000
+#define PMEM_KERNEL_EBI1_SIZE	0x1C000
 #endif	// CONFIG_ARCH_MSM7X27
 
 //#if defined(CONFIG_MACH_EUROPA)
@@ -270,6 +259,7 @@ static struct platform_device sec_device_jack = {
 	},
 };
 #endif
+
 static struct resource smc91x_resources[] = {
 	[0] = {
 		.start	= 0x9C004300,
@@ -358,8 +348,8 @@ static struct android_usb_product usb_products[] = {
 static struct usb_mass_storage_platform_data mass_storage_pdata = {
 	.nluns		= 1,
 	.vendor		= "SAMSUNG ",
-	.product        = "GT-I5500 Card",
-	.release	= 0x0100,
+	.product	= "GT-I5500 Card",
+	.release	= 0xFFFF,
 };
 
 static struct platform_device usb_mass_storage_device = {
@@ -843,11 +833,7 @@ static struct platform_device hs_device = {
 
 #define GPIO_OUT_132    132
 #define GPIO_OUT_131    131
-#if defined(CONFIG_FB_MSM_LCDC_TA8566_WQVGA)
-#define GPIO_OUT_103    102
-#else
-#define GPIO_OUT_103    103  
-#endif
+#define GPIO_OUT_103    103
 #define GPIO_OUT_122    122
 #define GPIO_OUT_101    101
 
@@ -885,14 +871,13 @@ static int msm_fb_lcdc_config(int on)
 	return rc;
 }
 
-/* 20100915 static */ int gpio_array_num[] = {
+static int gpio_array_num[] = {
 				GPIO_OUT_132, /* spi_clk */
 				GPIO_OUT_131, /* spi_cs  */
 				GPIO_OUT_103, /* spi_sdi */
 				GPIO_OUT_122, /* lcd_en */
 				GPIO_OUT_101,  /* lcd_reset */
 				};
-EXPORT_SYMBOL(gpio_array_num); // 20100915
 
 static void lcdc_gordon_gpio_init(void)
 {
@@ -920,8 +905,12 @@ static void config_lcdc_gpio_table(uint32_t *table, int len, unsigned enable)
 {
 	int n, rc;
 
+/* 20100823 hongkuk.son */
+#if 0
 	// for avoiding potential rpc error
 	return;
+#endif
+/***/
 
 	for (n = 0; n < len; n++) {
 		rc = gpio_tlmm_config(table[n],
@@ -946,6 +935,10 @@ static char *msm_fb_lcdc_vreg[] = {
 	"ldo3"
 };
 
+static char *msm_fb_lcdc_vreg_rev02[] = {
+	"ldo4"
+};
+
 #define MSM_FB_LCDC_VREG_OP(name, op) \
 do { \
 	vreg = vreg_get(0, name); \
@@ -957,20 +950,35 @@ do { \
 
 static int msm_fb_lcdc_power_save(int on)
 {
+/*
 	struct vreg *vreg;
 	int i;
+	int array_size = 0;
 
-	for (i = 0; i < ARRAY_SIZE(msm_fb_lcdc_vreg); i++) {
+	if( board_hw_revision >= 0x3 )
+		array_size = ARRAY_SIZE(msm_fb_lcdc_vreg_rev02);
+	else
+		array_size = ARRAY_SIZE(msm_fb_lcdc_vreg);
+
+	for (i = 0; i < array_size; i++) {
 		if (on) {
+			if( board_hw_revision >= 0x3 )
+				MSM_FB_LCDC_VREG_OP(msm_fb_lcdc_vreg_rev02[i], enable);
+			else
 			MSM_FB_LCDC_VREG_OP(msm_fb_lcdc_vreg[i], enable);
 			vreg_set_level(vreg, OUT3000mV);
 			}
 		else{
+			if( board_hw_revision >= 0x3 )
+				MSM_FB_LCDC_VREG_OP(msm_fb_lcdc_vreg_rev02[i], disable);
+			else
 			MSM_FB_LCDC_VREG_OP(msm_fb_lcdc_vreg[i], disable);
 			// for avoiding potential rpc error
 			//gpio_tlmm_config(GPIO_CFG(GPIO_OUT_101, 0,
-			//GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
-			//gpio_tlmm_config(GPIO_CFG(GPIO_OUT_101, 0, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
+			//GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA), GPIO_ENABLE);
+// 20100823 hongkuk.son 
+			gpio_tlmm_config(GPIO_CFG(GPIO_OUT_101, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA), GPIO_ENABLE);
+//
 			gpio_set_value(101, 0);
 			mdelay(15);
 			
@@ -978,7 +986,7 @@ static int msm_fb_lcdc_power_save(int on)
 			mdelay(15);
 		}
 	}
-	return 0;
+*/
 }
 static struct lcdc_platform_data lcdc_pdata = {
 	.lcdc_gpio_config = msm_fb_lcdc_config,
@@ -1001,8 +1009,7 @@ static struct platform_device lcdc_s6d04m0_panel_device = {
 #endif
 
 #if defined(CONFIG_FB_MSM_LCDC_TA8566_WQVGA)
-/* 20100915 static */
-void lcdc_ta8566_config_gpios(int enable)
+static void lcdc_ta8566_config_gpios(int enable)
 {
 	config_lcdc_gpio_table(lcdc_gpio_table,
 		ARRAY_SIZE(lcdc_gpio_table), enable);
@@ -1020,11 +1027,31 @@ static struct platform_device lcdc_ta8566_panel_device = {
 		.platform_data = &lcdc_ta8566_panel_data,
 	}
 };
-
-EXPORT_SYMBOL(lcdc_ta8566_config_gpios);  // 20100915
 #endif
 
 
+/* 20100823 hongkuk.son */
+#if defined(CONFIG_FB_MSM_LCDC_S6D16A0X_HVGA)
+static void lcdc_s6d16a0x_config_gpios(int enable)
+{
+	config_lcdc_gpio_table(lcdc_gpio_table,
+		ARRAY_SIZE(lcdc_gpio_table), enable);
+}
+
+static struct msm_panel_common_pdata lcdc_s6d16a0x_panel_data = {
+	.panel_config_gpio = lcdc_s6d16a0x_config_gpios,
+	.gpio_num          = gpio_array_num,
+};
+
+static struct platform_device lcdc_s6d16a0x_panel_device = {
+	.name   = "lcdc_s6d16a0x_hvga",
+	.id     = 0,
+	.dev    = {
+		.platform_data = &lcdc_s6d16a0x_panel_data,
+	}
+};
+#endif
+/***/
 #if defined(CONFIG_FB_MSM_LCDC_S6D04D1_WQVGA)
 static void lcdc_s6d04d1_config_gpios(int enable)
 {
@@ -1077,6 +1104,14 @@ static int msm_fb_detect_panel(const char *name)
 		else
 			ret = -ENODEV;
 #endif
+/* 20100823 hongkuk.son */
+#if defined(CONFIG_FB_MSM_LCDC_S6D16A0X_HVGA)
+		if (!strcmp(name, "lcdc_s6d16a0x_hvga"))
+			ret = 0;
+		else
+			ret = -ENODEV;
+#endif
+/***/
 
 //	}
 
@@ -1116,6 +1151,7 @@ static void keypad_gpio_control(struct platform_device *pdev)
 		}
 	for(i=0; i<minfo->ninputs; i++)	// KBR
 		{
+//		config = GPIO_CFG(minfo->input_gpios[i], 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA);
 		config = GPIO_CFG(minfo->input_gpios[i], 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_UP, GPIO_CFG_2MA);
 		ret = gpio_tlmm_config(config, GPIO_CFG_ENABLE);
 		if (ret) 
@@ -1164,10 +1200,10 @@ static unsigned bt_config_power_off[] = {
 };
 
 void wlan_setup_clock(int on);
-//extern int bluesleep_start(void);
-//extern void bluesleep_stop(void);
+extern int bluesleep_start(void);
+extern void bluesleep_stop(void);
 
-#if defined(CONFIG_MACH_EUROPA)
+#if defined(CONFIG_MACH_COOPER)
 static void bluetooth_setup_power(int on)
 {
 	struct vreg *vreg_bt_2_6v;	
@@ -1219,8 +1255,8 @@ static int bluetooth_power(int on)
 			}
 		}
 
-#if defined(CONFIG_MACH_EUROPA)
-		bluetooth_setup_power(1);
+#if defined(CONFIG_MACH_COOPER)
+		bluetooth_setup_power(1); //jh8181.choi
 #endif
 		
 		gpio_tlmm_config(GPIO_CFG(BT_PWR,0,GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, 
@@ -1229,13 +1265,16 @@ static int bluetooth_power(int on)
 
 		mdelay(100);
 
-		//bluesleep_start();
+		bluesleep_start();
 		}
 	else {
-		//bluesleep_stop();
+		bluesleep_stop();
 
 		gpio_set_value(BT_PWR, 0);										/* BT_VREG_CTL */
 
+		if (gpio_get_value(gpio_wlan_reset_n) == 0)
+			wlan_setup_clock(0);
+		
 		for (pin = 0; pin < ARRAY_SIZE(bt_config_power_off); pin++) {
 #if 0 /* FIXME */		
 			rc = gpio_tlmm_config(bt_config_power_off[pin],
@@ -1249,8 +1288,8 @@ static int bluetooth_power(int on)
 #endif
 		}
 				
-#if defined(CONFIG_MACH_EUROPA)
-		bluetooth_setup_power(0);
+#if defined(CONFIG_MACH_COOPER)
+		bluetooth_setup_power(0); //jh8181.choi
 #endif
 	}
 	return 0;
@@ -1418,31 +1457,28 @@ static struct i2c_board_info mus_i2c_devices[] = {
     {
             I2C_BOARD_INFO("fsa9280",0x4A>>1),
     },
-#ifdef CONFIG_SENSORS_GP2A
+#ifdef CONFIG_SENSORS_TAOS
 	{
-		I2C_BOARD_INFO("gp2a", 0x88 >> 1),
+		I2C_BOARD_INFO("taos", 0x39),
 	},
 #endif
 };
 
 
-static struct i2c_board_info i2c_devices_new[] = {
-#ifdef CONFIG_S5K5CA //PGH
+static struct i2c_board_info cam_i2c_devices[] = {
+#ifdef CONFIG_ISX006
 	{
-		I2C_BOARD_INFO("s5k5ca", 0x78>>1),
+		I2C_BOARD_INFO("isx006", 0x1A),
+	},
+#endif	
+#ifdef CONFIG_S5K4ECGX_COOPER
+	{
+		I2C_BOARD_INFO("s5k4ecgx", 0x5A>>1),
 	},
 #endif	
 };
 
-static struct i2c_board_info mus_i2c_devices_new[] = {
-	{
-        	I2C_BOARD_INFO("fsa9280",0x4A>>1),
-	},
-#ifdef CONFIG_SENSORS_GP2A
-	{
-		I2C_BOARD_INFO("gp2a", 0x88 >> 1),
-	},
-#endif
+static struct i2c_board_info sensor_i2c_devices[] = {
 #ifdef CONFIG_SENSORS_MMC31XX
 	{
 		I2C_BOARD_INFO(MMC31XX_I2C_NAME,  MMC31XX_I2C_ADDR),
@@ -1453,13 +1489,28 @@ static struct i2c_board_info mus_i2c_devices_new[] = {
 		I2C_BOARD_INFO("kr3dm_accel",KR3DM_I2C_ADDR >> 1),
 },
 #endif
+#ifdef CONFIG_SENSORS_BMA_ACCEL
+{
+		I2C_BOARD_INFO("bma_accel",0x08), // [HSS]  0X18 => 0X08 (2010.09.29)
+},
+#endif
+#ifdef CONFIG_SENSORS_TAOS
+	{
+		I2C_BOARD_INFO("taos",0x39),  
+	},
+#endif
 };
 
+static struct i2c_board_info mus_i2c_devices_new[] = {
+	{
+        	I2C_BOARD_INFO("fsa9280",0x4A>>1),
+	},
+};
 
 #ifdef CONFIG_MSM_CAMERA
 static uint32_t camera_off_gpio_table[] = {
 	/* parallel CAMERA interfaces */
-//	GPIO_CFG(0,  0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_8MA), /* nCAM_3M_RST */
+	GPIO_CFG(0,  0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_8MA), /* nCAM_3M_RST */
 //	GPIO_CFG(1,  0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), /* CAM_3M_STBY*/
 //	GPIO_CFG(2,  0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), /* CAM_CIF_STBY */
 //	GPIO_CFG(3,  0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), /* CAM_CIF_nRST */
@@ -1475,17 +1526,14 @@ static uint32_t camera_off_gpio_table[] = {
 	GPIO_CFG(13, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), /* HSYNC_IN */
 	GPIO_CFG(14, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), /* VSYNC_IN */
 	GPIO_CFG(15, 0, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_2MA), /* MCLK */
-
-	GPIO_CFG(60, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), /* SCL */
-	GPIO_CFG(61, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), /* SDA */
 };
 
 static uint32_t camera_on_gpio_table[] = {
 	/* parallel CAMERA interfaces */
 	GPIO_CFG(0,  0, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_UP, GPIO_CFG_8MA), /* nCAM_3M_RST */
-//	GPIO_CFG(1,  1, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), /* CAM_3M_STBY */
+//	GPIO_CFG(1,  0, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_2MA), /* CAM_3M_STBY */
 //	GPIO_CFG(2,  1, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), /* CAM_CIF_STBY */
-//	GPIO_CFG(3,  1, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), /* CAM_CIF_nRST */
+//	GPIO_CFG(3,  0, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_2MA), /* CAM_CIF_nRST */
 	GPIO_CFG(4,  1, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), /* DAT0 */
 	GPIO_CFG(5,  1, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), /* DAT1 */
 	GPIO_CFG(6,  1, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), /* DAT2 */
@@ -1498,10 +1546,6 @@ static uint32_t camera_on_gpio_table[] = {
 	GPIO_CFG(13, 1, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), /* HSYNC_IN */
 	GPIO_CFG(14, 1, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), /* VSYNC_IN */
 	GPIO_CFG(15, 1, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_16MA), /* MCLK */
-
-	GPIO_CFG(60, 1, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_UP, GPIO_CFG_16MA), /* SCL */
-	GPIO_CFG(61, 1, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_UP, GPIO_CFG_16MA), /* SDA */
-
 	};
 
 static void config_gpio_table(uint32_t *table, int len)
@@ -1646,6 +1690,49 @@ static struct platform_device msm_camera_sensor_s5k5ca = {
 };
 #endif
 
+#ifdef CONFIG_ISX006
+static struct msm_camera_sensor_flash_data flash_isx006 = {
+	.flash_type = MSM_CAMERA_FLASH_LED,
+	.flash_src  = &msm_flash_src
+};
+static struct msm_camera_sensor_info msm_camera_sensor_isx006_data = {
+        .sensor_name		= "isx006",
+        .sensor_reset		= 0, 
+        .sensor_pwd		= 107, 
+        .vcm_pwd		= 0, 
+        .pdata			= &msm_camera_device_data,
+        .flash_data		= &flash_isx006
+};
+ 
+static struct platform_device msm_camera_sensor_isx006 = {
+        .name      = "msm_camera_isx006",
+        .dev       = {  
+                .platform_data = &msm_camera_sensor_isx006_data,
+        },   
+};
+#endif
+
+#ifdef CONFIG_S5K4ECGX_COOPER
+static struct msm_camera_sensor_flash_data flash_s5k4ecgx = {
+	.flash_type = MSM_CAMERA_FLASH_LED,
+	.flash_src  = &msm_flash_src
+};
+static struct msm_camera_sensor_info msm_camera_sensor_s5k4ecgx_data = {
+        .sensor_name		= "s5k4ecgx",
+        .sensor_reset		= 0, 
+        .sensor_pwd		= 107, 
+        .vcm_pwd		= 0, 
+        .pdata			= &msm_camera_device_data,
+        .flash_data		= &flash_s5k4ecgx
+};
+ 
+static struct platform_device msm_camera_sensor_s5k4ecgx = {
+        .name      = "msm_camera_s5k4ecgx",
+        .dev       = {  
+                .platform_data = &msm_camera_sensor_s5k4ecgx_data,
+        },   
+};
+#endif
 
 #ifdef CONFIG_SR200PC10 //PGH
 static struct msm_camera_sensor_flash_data flash_sr200pc10 = {
@@ -1870,6 +1957,7 @@ static struct platform_device msm_batt_device = {
 static struct i2c_gpio_platform_data touch_i2c_gpio_data = {
 	.sda_pin    = TSP_SDA,
 	.scl_pin    = TSP_SCL,
+	.udelay    = 17,
 };
 
 static struct platform_device touch_i2c_gpio_device = {  
@@ -1897,6 +1985,20 @@ static struct platform_device fsa9280_i2c_gpio_device = {
 		.platform_data  = &fsa9280_i2c_gpio_data,
 	},
 };
+
+static struct i2c_gpio_platform_data sensor_i2c_gpio_data = {
+	.sda_pin    = 37,
+	.scl_pin    = 36,
+};
+
+static struct platform_device sensor_i2c_gpio_device = {  
+	.name       = "i2c-gpio",
+	.id     = 5,
+	.dev        = {
+		.platform_data  = &sensor_i2c_gpio_data,
+	},
+};
+
 
 static struct platform_device *devices[] __initdata = {
 #if !defined(CONFIG_MSM_SERIAL_DEBUGGER)
@@ -1934,6 +2036,7 @@ static struct platform_device *devices[] __initdata = {
 	&msm_device_i2c,
 	&touch_i2c_gpio_device,
 	&fsa9280_i2c_gpio_device,
+	&sensor_i2c_gpio_device,
 	&smc91x_device,
 	&android_pmem_kernel_ebi1_device,
 	&android_pmem_device,
@@ -1949,6 +2052,11 @@ static struct platform_device *devices[] __initdata = {
 #ifdef CONFIG_FB_MSM_LCDC_TA8566_WQVGA
 		&lcdc_ta8566_panel_device,
 #endif
+/* 20100823 hongkuk.son */
+#ifdef CONFIG_FB_MSM_LCDC_S6D16A0X_HVGA
+		&lcdc_s6d16a0x_panel_device,
+#endif
+/***/
 
 	&msm_device_uart_dm1,
 	&msm_device_uart_dm2,
@@ -1959,7 +2067,12 @@ static struct platform_device *devices[] __initdata = {
 	&msm_device_pmic_leds,
 	&msm_device_snd,
 	&msm_device_adspdec,
-
+#ifdef CONFIG_ISX006
+	&msm_camera_sensor_isx006,
+#endif
+#ifdef CONFIG_S5K4ECGX_COOPER
+	&msm_camera_sensor_s5k4ecgx,
+#endif
 #ifdef CONFIG_S5K5CA //PCAM
 	&msm_camera_sensor_s5k5ca,
 #endif
@@ -2121,6 +2234,7 @@ static void sdcc_gpio_init(void)
 
 static unsigned long vreg_sts, gpio_sts;
 static struct vreg *vreg_mmc;
+static struct vreg *vreg_mmc2;
 static unsigned mpp_mmc = 2;
 
 struct sdcc_gpio {
@@ -2247,7 +2361,10 @@ static uint32_t msm_sdcc_setup_power(struct device *dv, unsigned int vdd)
 				     MPP_CFG(MPP_DLOGIC_LVL_MSMP,
 				     MPP_DLOGIC_OUT_CTRL_LOW));
 			} else
+			{
 				rc = vreg_disable(vreg_mmc);
+				rc = vreg_disable(vreg_mmc2);
+			}
 			if (rc)
 				printk(KERN_ERR "%s: return val: %d \n",
 					__func__, rc);
@@ -2262,8 +2379,12 @@ static uint32_t msm_sdcc_setup_power(struct device *dv, unsigned int vdd)
 			     MPP_DLOGIC_OUT_CTRL_HIGH));
 		} else {
 			rc = vreg_set_level(vreg_mmc, OUT3000mV);
+			rc = vreg_set_level(vreg_mmc2, OUT2850mV);
 			if (!rc)
+			{
 				rc = vreg_enable(vreg_mmc);
+				rc = vreg_enable(vreg_mmc2);
+			}
 		}
 		if (rc)
 			printk(KERN_ERR "%s: return val: %d \n",
@@ -2387,31 +2508,15 @@ void wlan_setup_clock(int on)
 {
 struct vreg *vwlan_3_3v; 
  struct vreg *vwlan_1_8v;
-#if (CONFIG_BOARD_REVISION == 1)
-	struct vreg *vwlan_3_3v_2;
 
-	vwlan_3_3v = vreg_get(NULL, "ldo18");
+ vwlan_3_3v = vreg_get(NULL, "ldo18");
  if (IS_ERR(vwlan_3_3v)) {
  printk(KERN_ERR "%s: vreg get failed (%ld)\n",
      __func__, PTR_ERR(vwlan_3_3v));
  return;
  }
 
-	vwlan_3_3v_2 = vreg_get(NULL, "ldo19");
-	if (IS_ERR(vwlan_3_3v_2)) {
-		printk(KERN_ERR "%s: vreg get failed (%ld)\n",
-			   __func__, PTR_ERR(vwlan_3_3v_2));
-		return;
-	}
-#else
-	vwlan_3_3v = vreg_get(NULL, "ldo13");
-	if (IS_ERR(vwlan_3_3v)) {
-	printk(KERN_ERR "%s: vreg get failed (%ld)\n",
-		   __func__, PTR_ERR(vwlan_3_3v));
-	return;
-	}
-#endif
-	vwlan_1_8v = vreg_get(NULL, "ldo15");
+ vwlan_1_8v = vreg_get(NULL, "ldo15");
  if (IS_ERR(vwlan_1_8v)) {
   printk(KERN_ERR "%s: vreg get failed (%ld)\n",
       __func__, PTR_ERR(vwlan_1_8v));
@@ -2423,28 +2528,19 @@ struct vreg *vwlan_3_3v;
  if (on) {
   vreg_set_level(vwlan_3_3v, OUT3300mV);
   vreg_enable(vwlan_3_3v);  
-#if (CONFIG_BOARD_REVISION == 1)	
-		vreg_set_level(vwlan_3_3v_2, OUT3300mV);
-		vreg_enable(vwlan_3_3v_2);
-#endif
   vreg_set_level(vwlan_1_8v, OUT1800mV);
   vreg_enable(vwlan_1_8v);
-#if (CONFIG_BOARD_REVISION != 1)	
-		gpio_set_value(VDD_WLAN_EN, 1);	/* VDD_WLAN_EN */
-#endif
-#if defined(CONFIG_MACH_EUROPA)
+  gpio_set_value(VDD_WLAN_EN, 1);  /* VDD_WLAN_EN */
   /* additional delay for power on */
   mdelay(20);
-#endif
  }
-#if defined(CONFIG_MACH_EUROPA)
  else
  {
+   gpio_set_value(VDD_WLAN_EN, 0);  /* VDD_WLAN_EN Disable */ 
   /* power off for sleep current */
   vreg_disable(vwlan_3_3v);
   vreg_disable(vwlan_1_8v);
  }
-#endif
 }
 
 void wlan_setup_power(int on, int detect)
@@ -2468,7 +2564,7 @@ void wlan_setup_power(int on, int detect)
 #endif /* WLAN_HOST_WAKE */
 		gpio_set_value(gpio_wlan_reset_n, 0);	/* WLAN_RESET */
 
-#if defined(CONFIG_MACH_EUROPA) /* Atheros */
+#if defined(CONFIG_MACH_COOPER) /* Atheros */
 		if (gpio_get_value(BT_PWR) == 0) {
 			mdelay(30);
 			wlan_setup_clock(0);		
@@ -2554,6 +2650,7 @@ static void __init msm7x2x_init_mmc(void)
 {
 	if (!machine_is_msm7x25_ffa() && !machine_is_msm7x27_ffa()) {
 		vreg_mmc = vreg_get(NULL, "ldo16");
+		vreg_mmc2 = vreg_get(NULL, "ldo15");
 		if (IS_ERR(vreg_mmc)) {
 			printk(KERN_ERR "%s: vreg get failed (%ld)\n",
 			       __func__, PTR_ERR(vreg_mmc));
@@ -2567,7 +2664,6 @@ static void __init msm7x2x_init_mmc(void)
 		printk (KERN_ERR "Error configuraing WLAN_RESET_N\n");
 	if (gpio_tlmm_config(GPIO_CFG(17, 0, GPIO_CFG_INPUT, GPIO_CFG_NO_PULL, GPIO_CFG_2MA), GPIO_CFG_ENABLE))
 		printk (KERN_ERR "Error configuraing GPIO_WLAN_HOST_WAKE\n");
-
 
 #ifdef CONFIG_MMC_MSM_CARD_HW_DETECTION
 	int rc = 0;
@@ -2588,6 +2684,7 @@ static void __init msm7x2x_init_mmc(void)
 	if (machine_is_msm7x25_surf() || machine_is_msm7x27_surf() ||
 		machine_is_msm7x27_ffa()) {
 #ifdef CONFIG_MMC_MSM_SDC2_SUPPORT
+		msm_sdcc_setup_gpio(2, 1);
 		msm_add_sdcc(2, &msm7x2x_sdc2_data);
 #endif
 	}
@@ -2787,6 +2884,8 @@ static void __init msm7x2x_init(void)
         kgsl_pdata.pt_max_count = 32;
 #else
 	kgsl_pdata.pt_va_size = SZ_128M;
+	//kgsl_pdata.pt_va_size = SZ_64M;
+	//kgsl_pdata.pt_va_size = (SZ_128M+SZ_64M);
         /* We only ever have one pagetable for everybody */
         kgsl_pdata.pt_max_count = 1;
 #endif
@@ -2845,6 +2944,7 @@ static void __init msm7x2x_init(void)
 #endif
 	msm_device_i2c_init();
 	
+#if 0	//ino.baek 2010-08-26 : Changed Cooper H/W rev 0x3 -> 0x1	
 	// WLAN_RESET_N 
 	if( board_hw_revision < 3 )
 		gpio_wlan_reset_n = 78;
@@ -2861,6 +2961,18 @@ static void __init msm7x2x_init(void)
 	i2c_register_board_info(2, touch_i2c_devices, ARRAY_SIZE(touch_i2c_devices));
 	i2c_register_board_info(3, mus_i2c_devices, ARRAY_SIZE(mus_i2c_devices));
 	}
+#else
+	if( board_hw_revision >= 3 )
+		i2c_register_board_info(0, cam_i2c_devices, ARRAY_SIZE(cam_i2c_devices));
+	else
+		i2c_register_board_info(0, sensor_i2c_devices, ARRAY_SIZE(sensor_i2c_devices));
+	i2c_register_board_info(2, touch_i2c_devices, ARRAY_SIZE(touch_i2c_devices));
+	i2c_register_board_info(3, mus_i2c_devices_new, ARRAY_SIZE(mus_i2c_devices_new));
+#endif
+	if( board_hw_revision >= 3 )
+		i2c_register_board_info(5, sensor_i2c_devices, ARRAY_SIZE(sensor_i2c_devices));
+	else
+		i2c_register_board_info(5, cam_i2c_devices, ARRAY_SIZE(cam_i2c_devices));
 #ifdef CONFIG_SURF_FFA_GPIO_KEYPAD
 	if (machine_is_msm7x25_ffa() || machine_is_msm7x27_ffa())
 		platform_device_register(&keypad_device_7k_ffa);
@@ -2998,7 +3110,7 @@ static void __init msm7x2x_map_io(void)
 #endif
 }
 
-#ifdef	CONFIG_MACH_EUROPA	
+#ifdef	CONFIG_MACH_EUROPA
 MACHINE_START(MSM7X27_SURF, "GT-I5500 Board")
 #ifdef CONFIG_MSM_DEBUG_UART
 	.phys_io        = MSM_DEBUG_UART_PHYS,
@@ -3010,8 +3122,10 @@ MACHINE_START(MSM7X27_SURF, "GT-I5500 Board")
 	.init_machine	= msm7x2x_init,
 	.timer		= &msm_timer,
 MACHINE_END
-#else
-MACHINE_START(MSM7X27_SURF, "GT-I5500 Board")
+#endif
+
+#ifdef	CONFIG_MACH_COOPER	
+MACHINE_START(MSM7X27_SURF, "GT-S5830 Board")
 #ifdef CONFIG_MSM_DEBUG_UART
 	.phys_io        = MSM_DEBUG_UART_PHYS,
 	.io_pg_offst    = ((MSM_DEBUG_UART_BASE) >> 18) & 0xfffc,
